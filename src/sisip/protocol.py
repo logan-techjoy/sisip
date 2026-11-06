@@ -129,10 +129,12 @@ def make_message(registry, nodes, roots, *, kind=TASK, reply_to=None,
     try:
         required = [] if required is None else list(required)
         nodes = list(nodes)
+        roots = list(roots)
     except TypeError:
-        raise ProtocolError("nodes and required must be sequences") from None
+        raise ProtocolError("nodes, roots and required must be sequences") from None
     _need(all(_uint(h) for h in required), "invalid required concept handle")
-    _need(all(_array(n, 3) for n in nodes), "invalid node record")
+    _need(all(_array(n, 3) and _uint(n[0]) for n in nodes), "invalid node record")
+    _need(all(_uint(r) for r in roots), "invalid root node ID")
     required = sorted(set(required))
     used = set(required)
 

@@ -5,7 +5,7 @@
 *Model-independent structured communication during agentic workload execution.*
 
 **Status:** proposed core specification with an experimental Python reference
-implementation, version 1.0.1. This document replaces the supplied SIP draft.
+implementation, version 1.0.2. This document replaces the supplied SIP draft.
 MUST, MUST NOT, SHOULD, and MAY express requirements of this proposal.
 
 ## 1. Purpose and execution model
