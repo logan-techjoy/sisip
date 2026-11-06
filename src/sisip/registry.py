@@ -17,7 +17,11 @@ class Concept:
             raise ProtocolError("concept descriptor must be nonempty text")
         if type(self.kind) is not int or self.kind not in range(4):
             raise ProtocolError("invalid registry kind")
-        record = dumps([self.kind, self.descriptor.encode("utf-8")])
+        try:
+            encoded = self.descriptor.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ProtocolError("concept descriptor must be valid Unicode text") from exc
+        record = dumps([self.kind, encoded])
         return sha256(b"SISIP-CONCEPT/1\x00" + record).digest()
 
 

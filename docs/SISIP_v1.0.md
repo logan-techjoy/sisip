@@ -181,13 +181,17 @@ constraint MUST appear among the roots, so none can be hidden as a non-root node
 
 The reference runtime blocks on hard violations and reports soft violations.
 Hard constraint records MUST retain their node IDs and data throughout a workload;
-each successive graph MUST include them and their quantity targets. Handle
-bindings MUST be consistent throughout a workload: a handle, once bound to a
-concept ID, MUST NOT later be bound to a different ID, and a concept ID, once
-bound to a handle, MUST NOT later be bound to a different handle. A later
-message MAY introduce new bindings. Applications enforce
-additional domain requirements through adapter validation; the core does not
-provide a general constraint solver.
+each successive graph MUST include them, and each hard constraint's target node ID
+MUST still exist and be a quantity. The unit of that target quantity is checked
+against the required unit on every message. The target's numeric value is NOT
+locked: adapters may compute or refine it, and the core does not detect a changed
+value. Value integrity is an application responsibility, enforced through adapter
+validation. Handle bindings MUST be consistent throughout a workload: a handle,
+once bound to a concept ID, MUST NOT later be bound to a different ID, and a
+concept ID, once bound to a handle, MUST NOT later be bound to a different handle.
+A later message MAY introduce new bindings. Applications enforce additional domain
+requirements through adapter validation; the core does not provide a general
+constraint solver.
 
 ## 5. Serialization and integrity
 
@@ -309,7 +313,8 @@ This release supplies no encryption, digital signatures, distributed registry,
 Merkle proof service, graph repair, Rust library, or model-specific trained mapper.
 COSE may be evaluated for a future authenticated message profile; it is not part
 of the implemented wire format. Semantic preservation across actual models is
-not established by the deterministic demo.
+not established by the deterministic demo. Possible future extensions include
+value-locking constraints that fix a target quantity's numeric value.
 
 A conforming core codec MUST satisfy sections 3–5 and reject unsupported data.
 A conforming reference-style execution gate additionally enforces section 1's

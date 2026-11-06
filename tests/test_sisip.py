@@ -376,5 +376,85 @@ class SessionBindingTests(unittest.TestCase):
             self.session.receive(encode(m))
 
 
+class HardConstraintScopeTests(unittest.TestCase):
+    """Pins spec 4.3: the hard constraint node is locked; its target's value is not."""
+
+    def setUp(self):
+        self.m = example_message()
+        self.session = AgentSession(DEMO_REGISTRY, clock=lambda: self.m[4])
+
+    def reply_with(self, m, nodes):
+        return make_message(DEMO_REGISTRY, nodes, m[10], kind=RESULT,
+                            reply_to=m[3], timestamp_ms=m[4], message_id=b"r" * 16)
+
+    def test_target_value_may_change_and_result_finalizes(self):
+        def adapter(m):
+            nodes = copy.deepcopy(m[9])
+            self.assertEqual(nodes[1][2][0], 5)
+            nodes[1][2][0] = 999
+            return self.reply_with(m, nodes)
+        self.session.step(encode(self.m), adapter)
+        final = self.session.finalize()
+        self.assertEqual(final[9][1][2], [999, 0, DEMO_REGISTRY.handle(CELSIUS_DELTA)])
+
+    def test_target_unit_change_blocks_session(self):
+        other = Concept("sisip.demo/v1/unit/kelvin-difference", UNIT)
+        base = [DEMO_REGISTRY.get(cid) for _, cid in DEMO_REGISTRY.dictionary()]
+        registry = Registry(base + [other])
+        old = dict(DEMO_REGISTRY.dictionary())
+        new = {cid: h for h, cid in registry.dictionary()}
+        nodes = copy.deepcopy(self.m[9])
+        nodes[0][2] = new[old[nodes[0][2]]]
+        nodes[1][2][2] = new[old[nodes[1][2][2]]]
+        nodes[2][2][1] = new[old[nodes[2][2][1]]]
+        nodes[3][2][1] = new[old[nodes[3][2][1]]]
+        first = make_message(registry, nodes, [3, 4], timestamp_ms=self.m[4])
+        session = AgentSession(registry, clock=lambda: first[4])
+
+        def adapter(m):
+            changed = copy.deepcopy(m[9])
+            changed[1][2][2] = registry.handle(other)
+            return make_message(registry, changed, m[10], kind=RESULT, reply_to=m[3],
+                                timestamp_ms=m[4], message_id=b"r" * 16)
+        with self.assertRaises(ProtocolError):
+            session.step(encode(first), adapter)
+        with self.assertRaises(ProtocolError):
+            session.finalize()
+
+    def test_altered_hard_constraint_node_is_rejected(self):
+        self.session.receive(encode(self.m))
+        nodes = copy.deepcopy(self.m[9])
+        nodes[3][2][2] = 1
+        reply = self.reply_with(self.m, nodes)
+        with self.assertRaises(ProtocolError):
+            self.session.receive(encode(reply))
+        with self.assertRaises(ProtocolError):
+            self.session.finalize()
+
+    def test_hard_constraint_target_must_exist(self):
+        def adapter(m):
+            nodes = [n for n in copy.deepcopy(m[9]) if n[0] != 2]
+            return self.reply_with(m, nodes)
+        with self.assertRaises(ProtocolError):
+            self.session.step(encode(self.m), adapter)
+        with self.assertRaises(ProtocolError):
+            self.session.finalize()
+
+
+class ConceptEncodingTests(unittest.TestCase):
+    def test_lone_surrogate_descriptor_raises_protocol_error(self):
+        with self.assertRaises(ProtocolError):
+            Concept("demo/\ud800", UNIT).cid
+
+    def test_registry_construction_raises_protocol_error(self):
+        with self.assertRaises(ProtocolError):
+            Registry([Concept("demo/\udfff", UNIT)])
+
+    def test_descriptors_are_not_normalized(self):
+        composed, decomposed = "caf\u00e9", "cafe\u0301"
+        self.assertNotEqual(Concept(composed, UNIT).cid, Concept(decomposed, UNIT).cid)
+        self.assertNotEqual(Concept("Demo", UNIT).cid, Concept("demo", UNIT).cid)
+
+
 if __name__ == "__main__":
     unittest.main()
