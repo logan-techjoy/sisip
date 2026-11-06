@@ -468,10 +468,29 @@ class MalformedInputTests(unittest.TestCase):
             dict(nodes=[[1, 0, loc]], roots=[1], required=[1, "a"]),
             dict(nodes=[[1, 0, loc]], roots=[1], required=[True]),
             dict(nodes=5, roots=[1]),
+            dict(nodes=[[1, 0, loc]], roots=5),
+            dict(nodes=[[1, 0, loc]], roots=[1, "a"]),
+            dict(nodes=[[1, 0, loc]], roots=[True]),
+            dict(nodes=[["a", 0, loc], [1, 0, loc]], roots=[1]),
+            dict(nodes=[[True, 0, loc]], roots=[1]),
         ]
         for kwargs in bad_calls:
             with self.subTest(kwargs=kwargs), self.assertRaises(ProtocolError):
                 make_message(r, **kwargs)
+
+    def test_make_message_accepts_any_sequence_inputs(self):
+        from sisip.demo import LOCATION, DELTA
+        r = DEMO_REGISTRY
+        loc, rel = r.handle(LOCATION), r.handle(DELTA)
+        base = [[1, 0, loc], [2, 0, loc], [3, 2, [1, rel, 2, 0, None]]]
+        for nodes, roots, required in (
+                (base, [3], (loc,)),
+                ((n for n in base), (r for r in [3]), (h for h in [loc])),
+                (list(reversed(base)), [3], None)):
+            with self.subTest(nodes=nodes):
+                m = make_message(r, nodes, roots, required=required)
+                self.assertEqual([n[0] for n in m[9]], [1, 2, 3])
+                self.assertEqual(m[10], [3])
 
     def test_dictionary_rejects_invalid_handles(self):
         for handles in ([True], [0], [1.0], ["a"], [10**6]):

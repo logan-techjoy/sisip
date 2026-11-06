@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-11-06
+
+Wire format and protocol version `[1, 0]` are unchanged.
+
+- `make_message` raises `ProtocolError`, not `TypeError`, for non-sequence or
+  non-integer roots and for non-integer node IDs.
+- `MANIFEST.sha256` lists only tracked files. The 1.0.1 manifest also listed six
+  local `__pycache__` files that are not part of the source.
+
 ## 1.0.1 — 2026-11-06
 
 Wire format and protocol version `[1, 0]` are unchanged; the conformance fixture
