@@ -5,7 +5,7 @@
 *Model-independent structured communication during agentic workload execution.*
 
 **Status:** proposed core specification with an experimental Python reference
-implementation, version 1.0.0. This document replaces the supplied SIP draft.
+implementation, version 1.0.1. This document replaces the supplied SIP draft.
 MUST, MUST NOT, SHOULD, and MAY express requirements of this proposal.
 
 ## 1. Purpose and execution model
@@ -86,9 +86,16 @@ The reference registry stores descriptors and roles; it does not implement an
 ontology server or verify external definitions.
 
 Concept IDs are full 256-bit digests. A message dictionary assigns positive
-uint64 handles to these digests. These handles are message-local aliases, not
-truncated hashes and not tokenizer vocabulary IDs. Duplicate IDs or duplicate
-handles MUST be rejected. Graph node IDs are a separate positive uint64 space.
+uint64 handles to these digests. Handles are assigned by the registry: in the
+reference implementation a concept's handle is its 1-based position in the
+bytewise-sorted full registry, so it is stable for one registry snapshot and
+identical across every message of a workload built from that snapshot. Senders
+SHOULD use registry-assigned handles; the reference gate does not verify a
+handle's registry position, only that each handle resolves to a registered
+concept and that bindings stay consistent within a workload. Handles
+are aliases, not truncated hashes and not tokenizer vocabulary IDs. Duplicate
+IDs or duplicate handles MUST be rejected. A registry may hold more than 4,096
+concepts; one message may reference at most 4,096 (its dictionary limit). Graph node IDs are a separate positive uint64 space.
 
 Cryptographic hashes greatly reduce accidental collision risk; they do not prove
 truth or eliminate the need for trusted definitions and registry governance.
@@ -114,13 +121,16 @@ The payload is a CBOR map with exactly these integer keys:
 | 5 | `0..3` | Task=0, update=1, result=2, handoff=3 |
 | 6 | bytes16 or null | Immediately preceding message ID, or null for initial task |
 | 7 | bytes32 | Registry snapshot ID |
-| 8 | `[[handle, concept_id], ...]` | Dictionary, increasing handle order |
+| 8 | `[[handle, concept_id], ...]` | Dictionary of used and required concepts only, increasing handle order |
 | 9 | `[[node_id, node_type, data], ...]` | Nodes, increasing node ID order |
 | 10 | `[node_id, ...]` | Statement/constraint roots, increasing, unique |
-| 11 | `[handle, ...]` | Sender-required concepts, increasing, unique |
+| 11 | `[handle, ...]` | Sender-required concepts, increasing, unique; empty unless the sender names some |
 
-Every referenced node/handle MUST exist. The dictionary MUST NOT contain entries
-unused by either graph fields or the required-concept list. At least one node
+Every referenced node/handle MUST exist. The dictionary contains exactly the
+handles referenced by graph fields or listed as sender-required, and MUST NOT
+contain entries unused by either. It is not a copy of the registry. A sender
+lists a concept as required only when the receiver must not proceed without it;
+by default nothing is sender-required. At least one node
 and one root are required. Core payload keys are closed: extra keys, versions,
 profiles, or node types are errors rather than silently ignored extensions.
 
@@ -174,10 +184,17 @@ constraint MUST appear among the roots, so none can be hidden as a non-root node
 
 The reference runtime blocks on hard violations and reports soft violations.
 Hard constraint records MUST retain their node IDs and data throughout a workload;
-each successive graph MUST include them and their quantity targets. Dictionary
-bindings MUST remain identical throughout that workload. Applications enforce
-additional domain requirements through adapter validation; the core does not
-provide a general constraint solver.
+each successive graph MUST include them, and each hard constraint's target node ID
+MUST still exist and be a quantity. The unit of that target quantity is checked
+against the required unit on every message. The target's numeric value is NOT
+locked: adapters may compute or refine it, and the core does not detect a changed
+value. Value integrity is an application responsibility, enforced through adapter
+validation. Handle bindings MUST be consistent throughout a workload: a handle,
+once bound to a concept ID, MUST NOT later be bound to a different ID, and a
+concept ID, once bound to a handle, MUST NOT later be bound to a different handle.
+A later message MAY introduce new bindings. Applications enforce additional domain
+requirements through adapter validation; the core does not provide a general
+constraint solver.
 
 ## 5. Serialization and integrity
 
@@ -203,7 +220,9 @@ There is no compression or delta encoding in the v1.0 core. Transport extensions
 must be explicitly agreed; they cannot silently change the core decoder behavior.
 
 The reference limits are 1 MiB per encoded item, depth 32, 100,000 decoded items,
-4,096 dictionary entries, and 4,096 graph nodes. Its session allows 4,096 messages,
+4,096 dictionary entries per message, and 4,096 graph nodes. The registry
+snapshot is a hash preimage, not a wire message, and is not bound by the item
+and size limits. Its session allows 4,096 messages,
 rejects timestamps older than five minutes or over 30 seconds ahead by default,
 and retains seen IDs without eviction until session close. Time windows and
 session capacity are configurable. Cross-session replay prevention is a transport
@@ -297,7 +316,8 @@ This release supplies no encryption, digital signatures, distributed registry,
 Merkle proof service, graph repair, Rust library, or model-specific trained mapper.
 COSE may be evaluated for a future authenticated message profile; it is not part
 of the implemented wire format. Semantic preservation across actual models is
-not established by the deterministic demo.
+not established by the deterministic demo. Possible future extensions include
+value-locking constraints that fix a target quantity's numeric value.
 
 A conforming core codec MUST satisfy sections 3–5 and reject unsupported data.
 A conforming reference-style execution gate additionally enforces section 1's

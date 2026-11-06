@@ -16,7 +16,7 @@ The runtime is cooperative Python application code, not an isolation boundary.
 It cannot stop an application from printing early, bypassing the gate, calling
 tools directly, or performing irreversible work inside a misbehaving adapter.
 It provides no rollback of tool actions. Only the declared unit constraints are
-machine-enforced; other constraints need application validation.
+machine-enforced (a hard-constrained quantity keeps its unit, not its value); other constraints need application validation.
 
 Replay state is session-local and in memory. Use durable authenticated correlation
 for distributed deployments. Session objects are not thread-safe. The 1 MiB

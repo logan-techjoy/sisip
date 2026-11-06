@@ -71,7 +71,8 @@ This release does not implement LLM inference, training, embedding translation,
 general theorem proving, probabilistic inference, or a universal ontology.
 
 The implemented hard constraint is **exact required-unit identity**. The runtime
-does not infer conversions, temperature trends, task completeness, or factual truth.
+does not lock the numeric value of a constrained quantity (only its unit),
+and does not infer conversions, temperature trends, task completeness, or factual truth.
 Applications must validate domain-specific task success before returning `RESULT`.
 The gate is cooperative application control, not a sandbox around arbitrary Python
 or a mandatory hook inside a hosted model.

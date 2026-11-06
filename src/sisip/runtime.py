@@ -77,6 +77,7 @@ class AgentSession:
         self._closed = False
         self._in_step = False
         self._history = []
+        self._bindings = {}
 
     @property
     def history(self):
@@ -99,8 +100,6 @@ class AgentSession:
                 previous = self._history[-1]
                 if m[5] == 0 or m[6] != previous[3]:
                     raise ProtocolError("workload exchanges must reply to the latest message")
-                if m[8] != previous[8]:
-                    raise ProtocolError("workload concept dictionary changed")
                 old_constraints = {n[0]: n for n in previous[9]
                                    if n[1] == CONSTRAINT and n[2][2] == HARD}
                 new_nodes = {n[0]: n for n in m[9]}
@@ -108,8 +107,14 @@ class AgentSession:
                     raise ProtocolError("workload dropped or changed a hard constraint")
             if m[7] != self.registry.snapshot:
                 raise ProtocolError("registry snapshot mismatch")
+            by_handle = dict(self._bindings)
+            by_cid = {cid: h for h, cid in by_handle.items()}
+            for handle, cid in m[8]:
+                if by_handle.setdefault(handle, cid) != cid or by_cid.setdefault(cid, handle) != handle:
+                    raise ProtocolError("workload concept binding changed")
             report = assess(m, self.registry)
             self._seen.add(m[3])
+            self._bindings = by_handle
             self._history.append(deepcopy(m))
             if not report.accepted:
                 self._blocked = True

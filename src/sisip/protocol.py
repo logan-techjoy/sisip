@@ -126,14 +126,39 @@ def validate(message):
 def make_message(registry, nodes, roots, *, kind=TASK, reply_to=None,
                  message_id=None, timestamp_ms=None, required=None):
     """Construct a core message using a pinned local registry."""
-    dictionary = registry.dictionary()
+    try:
+        required = [] if required is None else list(required)
+        nodes = list(nodes)
+    except TypeError:
+        raise ProtocolError("nodes and required must be sequences") from None
+    _need(all(_uint(h) for h in required), "invalid required concept handle")
+    _need(all(_array(n, 3) for n in nodes), "invalid node record")
+    required = sorted(set(required))
+    used = set(required)
+
+    def ref(handle):
+        # Malformed handles are left for validate() to reject as ProtocolError.
+        if _uint(handle):
+            used.add(handle)
+
+    for _, ntype, data in nodes:
+        if ntype in (ENTITY, CONCEPT):
+            ref(data)
+        elif ntype == QUANTITY and _array(data, 3):
+            ref(data[2])
+        elif ntype == STATEMENT and _array(data, 5):
+            ref(data[1])
+        elif ntype == CONSTRAINT and _array(data, 3):
+            ref(data[1])
+    # Only referenced/required handles are sent; handles stay registry-assigned.
+    dictionary = registry.dictionary(used)
     m = {
         0: MAGIC, 1: [1, 0], 2: 0,
         3: uuid4().bytes if message_id is None else message_id,
         4: int(time() * 1000) if timestamp_ms is None else timestamp_ms,
         5: kind, 6: reply_to, 7: registry.snapshot, 8: dictionary,
         9: sorted(nodes, key=lambda n: n[0]), 10: sorted(roots),
-        11: [x[0] for x in dictionary] if required is None else sorted(required),
+        11: required,
     }
     return validate(m)
 
