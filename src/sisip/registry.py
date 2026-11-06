@@ -60,10 +60,10 @@ class Registry:
         full registry). With `handles`, only those entries, in increasing order."""
         if handles is None:
             return [[i, cid] for i, cid in enumerate(self._ids, 1)]
-        try:
-            return [[h, self._ids[h - 1]] for h in sorted(set(handles)) if h >= 1]
-        except IndexError:
-            raise ProtocolError("handle not assigned by this registry") from None
+        handles = set(handles)
+        if not all(type(h) is int and 1 <= h <= len(self._ids) for h in handles):
+            raise ProtocolError("handle not assigned by this registry")
+        return [[h, self._ids[h - 1]] for h in sorted(handles)]
 
     def handle(self, concept):
         try:

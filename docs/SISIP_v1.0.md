@@ -5,7 +5,7 @@
 *Model-independent structured communication during agentic workload execution.*
 
 **Status:** proposed core specification with an experimental Python reference
-implementation, version 1.0.0. This document replaces the supplied SIP draft.
+implementation, version 1.0.1. This document replaces the supplied SIP draft.
 MUST, MUST NOT, SHOULD, and MAY express requirements of this proposal.
 
 ## 1. Purpose and execution model
@@ -89,7 +89,10 @@ Concept IDs are full 256-bit digests. A message dictionary assigns positive
 uint64 handles to these digests. Handles are assigned by the registry: in the
 reference implementation a concept's handle is its 1-based position in the
 bytewise-sorted full registry, so it is stable for one registry snapshot and
-identical across every message of a workload built from that snapshot. Handles
+identical across every message of a workload built from that snapshot. Senders
+SHOULD use registry-assigned handles; the reference gate does not verify a
+handle's registry position, only that each handle resolves to a registered
+concept and that bindings stay consistent within a workload. Handles
 are aliases, not truncated hashes and not tokenizer vocabulary IDs. Duplicate
 IDs or duplicate handles MUST be rejected. A registry may hold more than 4,096
 concepts; one message may reference at most 4,096 (its dictionary limit). Graph node IDs are a separate positive uint64 space.

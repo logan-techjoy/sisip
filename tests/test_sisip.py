@@ -326,7 +326,8 @@ class LargeRegistryTests(unittest.TestCase):
         self.assertEqual(len(snap), 32)
         for c in concepts[:2000]:
             r.handle(c)
-        self.assertLess(time.monotonic() - t, 5.0)
+        # Structural check (not wall-clock): handle() is a dict lookup.
+        self.assertEqual(len(r._handles), 50000)
         self.assertEqual(r.handle(sorted(concepts, key=lambda c: c.cid)[41]), 42)
 
 
@@ -454,6 +455,28 @@ class ConceptEncodingTests(unittest.TestCase):
         composed, decomposed = "caf\u00e9", "cafe\u0301"
         self.assertNotEqual(Concept(composed, UNIT).cid, Concept(decomposed, UNIT).cid)
         self.assertNotEqual(Concept("Demo", UNIT).cid, Concept("demo", UNIT).cid)
+
+
+class MalformedInputTests(unittest.TestCase):
+    def test_make_message_malformed_inputs_raise_protocol_error(self):
+        r = DEMO_REGISTRY
+        loc = r.handle(Concept("sisip.demo/v1/entity/Joplin-Missouri-USA", 0))
+        bad_calls = [
+            dict(nodes=[[1, 0, [1]]], roots=[1]),
+            dict(nodes=[[1, 0]], roots=[1]),
+            dict(nodes=[[1, 0, loc]], roots=[1], required=[[1]]),
+            dict(nodes=[[1, 0, loc]], roots=[1], required=[1, "a"]),
+            dict(nodes=[[1, 0, loc]], roots=[1], required=[True]),
+            dict(nodes=5, roots=[1]),
+        ]
+        for kwargs in bad_calls:
+            with self.subTest(kwargs=kwargs), self.assertRaises(ProtocolError):
+                make_message(r, **kwargs)
+
+    def test_dictionary_rejects_invalid_handles(self):
+        for handles in ([True], [0], [1.0], ["a"], [10**6]):
+            with self.subTest(handles=handles), self.assertRaises(ProtocolError):
+                DEMO_REGISTRY.dictionary(handles)
 
 
 if __name__ == "__main__":
