@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.1 — 2026-11-06
+
+Wire format and protocol version `[1, 0]` are unchanged; the conformance fixture
+is byte-identical.
+
+- `make_message` puts only the concepts a graph uses (plus any `required`
+  handles) into the message dictionary. `required` now defaults to empty instead
+  of marking every registry concept as sender-required.
+- Registries larger than 4,096 concepts can now send messages; the 4,096-entry
+  limit applies per message. Registry snapshots no longer hit the 1 MiB message
+  limit, and handle lookup is constant time.
+- The execution session requires consistent handle bindings across a workload
+  instead of an identical dictionary on every message; later messages may add
+  new bindings.
+- Clarified that a hard required-unit constraint locks the unit of its target
+  quantity, not its numeric value.
+- A descriptor that is not valid Unicode now raises `ProtocolError` instead of
+  `UnicodeEncodeError`.
+
 ## 1.0.0 — 2026-11-06
 
 - Renamed Semantic Interchange Protocol (SIP) to **Super Intelligence Semantic
