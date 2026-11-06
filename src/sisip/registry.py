@@ -1,7 +1,7 @@
 """Local, version-pinned concept definitions; no global registry is implied."""
 from dataclasses import dataclass
 from hashlib import sha256
-from .cbor import dumps, ProtocolError
+from .cbor import dumps, ProtocolError, _head
 
 ENTITY, CLASS, PREDICATE, UNIT = range(4)
 
@@ -29,19 +29,40 @@ class Registry:
             if cid in self._concepts and self._concepts[cid] != concept:
                 raise ProtocolError("concept identity collision")
             self._concepts[cid] = concept
+        self._ids = sorted(self._concepts)
+        self._handles = {cid: i for i, cid in enumerate(self._ids, 1)}
+        self._snapshot = None
 
     @property
     def snapshot(self):
-        return sha256(b"SISIP-REGISTRY/1\x00" + dumps(sorted(self._concepts))).digest()
+        # Hash preimage, not a wire message: stream the deterministic CBOR array
+        # (head + one 32-byte bstr per sorted ID) so the 1 MiB / 100k-item message
+        # limits do not apply. Bytes equal dumps(sorted ids) for small registries.
+        if self._snapshot is None:
+            h = sha256(b"SISIP-REGISTRY/1\x00")
+            h.update(_head(4, len(self._ids)))
+            bstr_head = _head(2, 32)
+            for cid in self._ids:
+                h.update(bstr_head)
+                h.update(cid)
+            self._snapshot = h.digest()
+        return self._snapshot
 
     def get(self, cid):
         return self._concepts.get(cid)
 
-    def dictionary(self):
-        return [[i, cid] for i, cid in enumerate(sorted(self._concepts), 1)]
+    def dictionary(self, handles=None):
+        """Registry-assigned [handle, cid] pairs (1-based index into the sorted
+        full registry). With `handles`, only those entries, in increasing order."""
+        if handles is None:
+            return [[i, cid] for i, cid in enumerate(self._ids, 1)]
+        try:
+            return [[h, self._ids[h - 1]] for h in sorted(set(handles)) if h >= 1]
+        except IndexError:
+            raise ProtocolError("handle not assigned by this registry") from None
 
     def handle(self, concept):
-        for handle, cid in self.dictionary():
-            if cid == concept.cid:
-                return handle
-        raise KeyError(concept.descriptor)
+        try:
+            return self._handles[concept.cid]
+        except KeyError:
+            raise KeyError(concept.descriptor) from None

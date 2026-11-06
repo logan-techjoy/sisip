@@ -18,7 +18,7 @@ def example_message(*, timestamp_ms=1735689600000):
         [2, 1, [5, 0, unit]],
         [3, 2, [1, r.handle(DELTA), 2, 0, 8200]],
         [4, 5, [2, unit, 0]],
-    ], [3, 4], timestamp_ms=timestamp_ms, message_id=bytes.fromhex("00000000000000000000000000000001"))
+    ], [3, 4], required=[r.handle(LOCATION), r.handle(DELTA), unit], timestamp_ms=timestamp_ms, message_id=bytes.fromhex("00000000000000000000000000000001"))
 
 
 def run_demo(*, timestamp_ms=1735689600000):

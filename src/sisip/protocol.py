@@ -126,14 +126,27 @@ def validate(message):
 def make_message(registry, nodes, roots, *, kind=TASK, reply_to=None,
                  message_id=None, timestamp_ms=None, required=None):
     """Construct a core message using a pinned local registry."""
-    dictionary = registry.dictionary()
+    required = [] if required is None else sorted(set(required))
+    used = set(required)
+    for _, ntype, data in nodes:
+        if ntype in (ENTITY, CONCEPT):
+            used.add(data)
+        elif ntype == QUANTITY and _array(data, 3):
+            used.add(data[2])
+        elif ntype == STATEMENT and _array(data, 5):
+            used.add(data[1])
+        elif ntype == CONSTRAINT and _array(data, 3):
+            used.add(data[1])
+    _need(all(_uint(h) for h in used), "invalid concept handle")
+    # Only referenced/required handles are sent; handles stay registry-assigned.
+    dictionary = registry.dictionary(used)
     m = {
         0: MAGIC, 1: [1, 0], 2: 0,
         3: uuid4().bytes if message_id is None else message_id,
         4: int(time() * 1000) if timestamp_ms is None else timestamp_ms,
         5: kind, 6: reply_to, 7: registry.snapshot, 8: dictionary,
         9: sorted(nodes, key=lambda n: n[0]), 10: sorted(roots),
-        11: [x[0] for x in dictionary] if required is None else sorted(required),
+        11: required,
     }
     return validate(m)
 

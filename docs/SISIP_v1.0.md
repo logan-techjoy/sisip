@@ -86,9 +86,13 @@ The reference registry stores descriptors and roles; it does not implement an
 ontology server or verify external definitions.
 
 Concept IDs are full 256-bit digests. A message dictionary assigns positive
-uint64 handles to these digests. These handles are message-local aliases, not
-truncated hashes and not tokenizer vocabulary IDs. Duplicate IDs or duplicate
-handles MUST be rejected. Graph node IDs are a separate positive uint64 space.
+uint64 handles to these digests. Handles are assigned by the registry: in the
+reference implementation a concept's handle is its 1-based position in the
+bytewise-sorted full registry, so it is stable for one registry snapshot and
+identical across every message of a workload built from that snapshot. Handles
+are aliases, not truncated hashes and not tokenizer vocabulary IDs. Duplicate
+IDs or duplicate handles MUST be rejected. A registry may hold more than 4,096
+concepts; one message may reference at most 4,096 (its dictionary limit). Graph node IDs are a separate positive uint64 space.
 
 Cryptographic hashes greatly reduce accidental collision risk; they do not prove
 truth or eliminate the need for trusted definitions and registry governance.
@@ -114,13 +118,16 @@ The payload is a CBOR map with exactly these integer keys:
 | 5 | `0..3` | Task=0, update=1, result=2, handoff=3 |
 | 6 | bytes16 or null | Immediately preceding message ID, or null for initial task |
 | 7 | bytes32 | Registry snapshot ID |
-| 8 | `[[handle, concept_id], ...]` | Dictionary, increasing handle order |
+| 8 | `[[handle, concept_id], ...]` | Dictionary of used and required concepts only, increasing handle order |
 | 9 | `[[node_id, node_type, data], ...]` | Nodes, increasing node ID order |
 | 10 | `[node_id, ...]` | Statement/constraint roots, increasing, unique |
-| 11 | `[handle, ...]` | Sender-required concepts, increasing, unique |
+| 11 | `[handle, ...]` | Sender-required concepts, increasing, unique; empty unless the sender names some |
 
-Every referenced node/handle MUST exist. The dictionary MUST NOT contain entries
-unused by either graph fields or the required-concept list. At least one node
+Every referenced node/handle MUST exist. The dictionary contains exactly the
+handles referenced by graph fields or listed as sender-required, and MUST NOT
+contain entries unused by either. It is not a copy of the registry. A sender
+lists a concept as required only when the receiver must not proceed without it;
+by default nothing is sender-required. At least one node
 and one root are required. Core payload keys are closed: extra keys, versions,
 profiles, or node types are errors rather than silently ignored extensions.
 
@@ -174,8 +181,11 @@ constraint MUST appear among the roots, so none can be hidden as a non-root node
 
 The reference runtime blocks on hard violations and reports soft violations.
 Hard constraint records MUST retain their node IDs and data throughout a workload;
-each successive graph MUST include them and their quantity targets. Dictionary
-bindings MUST remain identical throughout that workload. Applications enforce
+each successive graph MUST include them and their quantity targets. Handle
+bindings MUST be consistent throughout a workload: a handle, once bound to a
+concept ID, MUST NOT later be bound to a different ID, and a concept ID, once
+bound to a handle, MUST NOT later be bound to a different handle. A later
+message MAY introduce new bindings. Applications enforce
 additional domain requirements through adapter validation; the core does not
 provide a general constraint solver.
 
@@ -203,7 +213,9 @@ There is no compression or delta encoding in the v1.0 core. Transport extensions
 must be explicitly agreed; they cannot silently change the core decoder behavior.
 
 The reference limits are 1 MiB per encoded item, depth 32, 100,000 decoded items,
-4,096 dictionary entries, and 4,096 graph nodes. Its session allows 4,096 messages,
+4,096 dictionary entries per message, and 4,096 graph nodes. The registry
+snapshot is a hash preimage, not a wire message, and is not bound by the item
+and size limits. Its session allows 4,096 messages,
 rejects timestamps older than five minutes or over 30 seconds ahead by default,
 and retains seen IDs without eviction until session close. Time windows and
 session capacity are configurable. Cross-session replay prevention is a transport

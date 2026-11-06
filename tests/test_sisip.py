@@ -241,5 +241,140 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(self.session.history[0][9])
 
 
+def _subset_nodes(r, loc, delta, unit):
+    return [[1, 0, r.handle(loc)],
+            [2, 1, [5, 0, r.handle(unit)]],
+            [3, 2, [1, r.handle(delta), 2, 0, 8200]]]
+
+
+class RegistrySubsetTests(unittest.TestCase):
+    def setUp(self):
+        from sisip.demo import LOCATION, DELTA
+        self.LOCATION, self.DELTA = LOCATION, DELTA
+        self.r = Registry([LOCATION, DELTA, CELSIUS_DELTA, Concept("x/unused", 0)])
+        self.nodes = _subset_nodes(self.r, LOCATION, DELTA, CELSIUS_DELTA)
+
+    def build(self, **kw):
+        return make_message(self.r, copy.deepcopy(self.nodes), [3],
+                            timestamp_ms=1735689600000,
+                            message_id=bytes.fromhex("00" * 15 + "01"), **kw)
+
+    def test_subset_graph_with_empty_required(self):
+        m = self.build(required=[])
+        used = {self.r.handle(c) for c in (self.LOCATION, self.DELTA, CELSIUS_DELTA)}
+        self.assertEqual({h for h, _ in m[8]}, used)
+        self.assertEqual(m[11], [])
+        self.assertEqual(decode(encode(m)), m)
+
+    def test_default_required_is_empty(self):
+        m = self.build()
+        self.assertEqual(m[11], [])
+        self.assertEqual(len(m[8]), 3)
+
+    def test_explicit_required_in_dictionary_and_key_11(self):
+        extra = self.r.handle(Concept("x/unused", 0))
+        m = self.build(required=[extra])
+        self.assertIn(extra, m[11])
+        self.assertIn(extra, [h for h, _ in m[8]])
+        self.assertEqual(len(m[8]), 4)
+
+    def test_handles_stable_across_messages(self):
+        a = self.build(required=[])
+        b = make_message(self.r, [[1, 0, self.r.handle(self.LOCATION)],
+                                  [2, 1, [5, 0, self.r.handle(CELSIUS_DELTA)]],
+                                  [3, 2, [1, self.r.handle(self.DELTA), 2, 0, 8200]]], [3])
+        self.assertEqual(dict(a[8]), dict(b[8]))
+
+    def test_snapshot_bytes_unchanged_for_demo_registry(self):
+        import json
+        vec = json.loads((Path(__file__).resolve().parents[1] / "examples" /
+                          "temperature.vector.json").read_text())
+        self.assertEqual(DEMO_REGISTRY.snapshot.hex(), vec["registry_snapshot"])
+        legacy = hashlib.sha256(b"SISIP-REGISTRY/1\x00" +
+                                dumps(sorted(c.cid for c in DEMO_REGISTRY._concepts.values()))).digest()
+        self.assertEqual(DEMO_REGISTRY.snapshot, legacy)
+
+    def test_fixture_still_byte_identical(self):
+        directory = Path(__file__).resolve().parents[1] / "examples"
+        self.assertEqual((directory / "temperature.sisip").read_bytes(),
+                         encode(example_message()))
+
+
+class LargeRegistryTests(unittest.TestCase):
+    def test_5000_concept_registry_can_message_and_run_session(self):
+        from sisip.demo import LOCATION, DELTA
+        r = Registry([LOCATION, DELTA, CELSIUS_DELTA] +
+                     [Concept(f"bulk/{i}", 0) for i in range(5000)])
+        nodes = _subset_nodes(r, LOCATION, DELTA, CELSIUS_DELTA)
+        m = make_message(r, nodes, [3], timestamp_ms=1735689600000)
+        self.assertEqual(len(m[8]), 3)
+        self.assertEqual(decode(encode(m)), m)
+        session = AgentSession(r, clock=lambda: 1735689600000)
+
+        def reply(g):
+            return make_message(r, copy.deepcopy(g[9]), g[10], kind=RESULT,
+                                reply_to=g[3], timestamp_ms=1735689600000)
+        session.step(encode(m), reply)
+        self.assertEqual(session.finalize()[5], RESULT)
+
+    def test_50000_concept_snapshot_and_handle_fast(self):
+        import time
+        concepts = [Concept(f"bulk/{i}", 0) for i in range(50000)]
+        t = time.monotonic()
+        r = Registry(concepts)
+        snap = r.snapshot
+        self.assertEqual(len(snap), 32)
+        for c in concepts[:2000]:
+            r.handle(c)
+        self.assertLess(time.monotonic() - t, 5.0)
+        self.assertEqual(r.handle(sorted(concepts, key=lambda c: c.cid)[41]), 42)
+
+
+class SessionBindingTests(unittest.TestCase):
+    T = 1735689600000
+
+    def setUp(self):
+        from sisip.demo import LOCATION, DELTA
+        self.LOCATION, self.DELTA = LOCATION, DELTA
+        self.other = Concept("x/other-class", 1)
+        self.r = Registry([LOCATION, DELTA, CELSIUS_DELTA, self.other])
+        self.session = AgentSession(self.r, clock=lambda: self.T)
+        self.first = make_message(
+            self.r, _subset_nodes(self.r, LOCATION, DELTA, CELSIUS_DELTA), [3],
+            timestamp_ms=self.T, message_id=bytes.fromhex("00" * 15 + "01"))
+        self.session.receive(encode(self.first))
+
+    def follow(self, nodes, dictionary=None):
+        m = make_message(self.r, nodes, [3], kind=UPDATE, reply_to=self.first[3],
+                         timestamp_ms=self.T, message_id=bytes.fromhex("00" * 15 + "02"))
+        if dictionary is not None:
+            m[8] = dictionary
+        return m
+
+    def test_new_consistent_binding_accepted(self):
+        nodes = _subset_nodes(self.r, self.LOCATION, self.DELTA, CELSIUS_DELTA)
+        nodes.append([4, 4, self.r.handle(self.other)])
+        _, report = self.session.receive(encode(self.follow(nodes)))
+        self.assertTrue(report.accepted)
+
+    def test_handle_rebound_to_different_cid_rejected(self):
+        m = self.follow(_subset_nodes(self.r, self.LOCATION, self.DELTA, CELSIUS_DELTA))
+        d = dict(m[8])
+        h1, h2 = sorted(d)[:2]
+        m[8] = [[h1, d[h2]], [h2, d[h1]]] + [[h, d[h]] for h in sorted(d)[2:]]
+        with self.assertRaisesRegex(ProtocolError, "binding changed"):
+            self.session.receive(encode(m))
+
+    def test_cid_rebound_to_different_handle_rejected(self):
+        m = self.follow(_subset_nodes(self.r, self.LOCATION, self.DELTA, CELSIUS_DELTA))
+        loc = self.r.handle(self.LOCATION)
+        m[8] = sorted([[loc + 100, self.r.dictionary([loc])[0][1]]] +
+                      [e for e in m[8] if e[0] != loc])
+        m[9][0] = [1, 0, loc + 100]
+        m[11] = []
+        with self.assertRaisesRegex(ProtocolError, "binding changed"):
+            self.session.receive(encode(m))
+
+
 if __name__ == "__main__":
     unittest.main()
