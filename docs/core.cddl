@@ -1,0 +1,27 @@
+; SISIP v1.0 core. Ordering, normalization, references, resource limits,
+; and execution rules are additional requirements in SISIP_v1.0.md.
+envelope = [payload: bstr, digest: bstr .size 32]
+payload = {
+  0: 0x5349534950,
+  1: [1, 0],
+  2: 0,
+  3: bstr .size 16,
+  4: uint64,
+  5: 0..3,
+  6: (bstr .size 16) / null,
+  7: bstr .size 32,
+  8: [* [handle, bstr .size 32]],
+  9: [+ node],
+  10: [+ node-id],
+  11: [* handle]
+}
+node = [node-id, 0, handle]
+     / [node-id, 1, [int64, -18..18, handle]]
+     / [node-id, 2, [node-id, handle, node-id, 0..1, null / (0..10000)]]
+     / [node-id, 3, [uint64, uint64]]
+     / [node-id, 4, handle]
+     / [node-id, 5, [node-id, handle, 0..1]]
+uint64 = 0..18446744073709551615
+int64 = -9223372036854775808..9223372036854775807
+node-id = 1..18446744073709551615
+handle = 1..18446744073709551615

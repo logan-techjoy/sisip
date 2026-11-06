@@ -1,0 +1,28 @@
+{
+  "protocol": "SISIP v1.0",
+  "fixture": "temperature.sisip",
+  "wire_bytes": 271,
+  "payload_digest_sha256": "6468abb5910f7b1b56bad333c7af220e9c1e4da83fdfb04cfea889efbfa5c85c",
+  "registry_snapshot": "e3e53a686fddb2d997d8c146ac06085eb5260e245e243cbfb8d0be7010279b4e",
+  "wire_hex": "8258eaac001b0000005349534950018201000200035000000000000000000000000000000001041b000001941f297c00050006f6075820e3e53a686fddb2d997d8c146ac06085eb5260e245e243cbfb8d0be7010279b4e08838201582026e63f89ff2b1d2a40344a83f20115f1ad57c724c2e583bd1681ea43ec0d71ad8202582051da4bd80ae9c42952dcd01ddd6dc1bd43209eed9c4b4ef20637e5171c784d0a820358209b0b5476214c788cabee4a4e47e5e5b51560dfbb34b2491ae48be211aed44d68098483010003830201830500018303028501020200192008830405830201000a8203040b8301020358206468abb5910f7b1b56bad333c7af220e9c1e4da83fdfb04cfea889efbfa5c85c",
+  "dictionary": [
+    {
+      "handle": 1,
+      "concept_id": "26e63f89ff2b1d2a40344a83f20115f1ad57c724c2e583bd1681ea43ec0d71ad",
+      "descriptor": "sisip.demo/v1/unit/degree-Celsius-difference",
+      "role": 3
+    },
+    {
+      "handle": 2,
+      "concept_id": "51da4bd80ae9c42952dcd01ddd6dc1bd43209eed9c4b4ef20637e5171c784d0a",
+      "descriptor": "sisip.demo/v1/predicate/temperature-difference-unspecified-period",
+      "role": 2
+    },
+    {
+      "handle": 3,
+      "concept_id": "9b0b5476214c788cabee4a4e47e5e5b51560dfbb34b2491ae48be211aed44d68",
+      "descriptor": "sisip.demo/v1/entity/Joplin-Missouri-USA",
+      "role": 0
+    }
+  ]
+}
